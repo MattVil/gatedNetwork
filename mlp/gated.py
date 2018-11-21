@@ -39,7 +39,7 @@ saveNetwork = True
 
 frame_delay = 5 #on prend une frame sur frame_delay
 
-vid_out = "long_1-5.avi"
+vid_out = "../dataset/test-08_11_2019-001.avi"
 vid_in = "long_1-5.avi"
 
 path_save_dataset = "dataset/medium.txt"

@@ -28,9 +28,9 @@ def matMultiplication(image1, image2):
 
     retour = image1*image2 - image1
     # from [-1, 0] to [-1, 1]
-    retour += 1
-    retour *= 2
-    retour -= 1
+    # retour += 1
+    # retour *= 2
+    # retour -= 1
 
     return retour
 
@@ -51,7 +51,7 @@ def plot_error_evolution(errs, figure_name):
            title='Evolution de l\'erreur quadratique avec le temps')
     ax.grid()
 
-    fig.savefig("output/{}.png".format(figure_name))
+    fig.savefig(figure_name)
     plt.show()
 
 def record_video(file_name, frame_delay=1, vid_size=None):
@@ -64,12 +64,15 @@ def record_video(file_name, frame_delay=1, vid_size=None):
 
     nb_img = 1
     n=0
+    print("Save in {}".format(file_name))
     while(cap.isOpened()):
         ret, frame = cap.read()
         if ret and n%frame_delay==0:
             print(nb_img)
             out.write(frame)
             nb_img += 1
+            center, points = get_center_frame(frame, (40, 40))
+            cv2.rectangle(frame, points[0], points[1], (0,255,0), 3)
             cv2.imshow('frame',frame)
 
             if(vid_size):

@@ -1,34 +1,70 @@
 import cv2
+import numpy as np
+import math
 import pickle
 import random
+import datetime
 import getch
 from utils import convertGray, get_center_frame, matMultiplication
 from utils import print_progress
+import matplotlib
+import matplotlib.pyplot as plt
 
 class Dataset:
 
-    def __init__(self, data_size, with_labels=False, frame_delay=3):
-        self.data_size = data_size
-        self.with_labels = with_labels
-        self.frame_delay = frame_delay
-        self.path_to_pickle = ""
+    def __init__(self, img_size):
+        self.img_size = img_size
         self.data = []
+        self.X = []
+        self.Y = []
 
-    def load_dataset(self, path_to_dataset, concatenate=False):
+    def load(self, path_to_dataset):
         """
 
         """
         with open(path_to_dataset, "rb") as load_file:
-            if(concatenate):
-                self.data += pickle.load(load_file)
-            else:
-                self.data = pickle.load(load_file)
-            load_file.close()
-            print("Load : {} imgs".format(len(self.data)))
+            print("Load from {} ...".format(path_to_dataset))
+            self.data = pickle.load(load_file)
+
+            print("Data shape : {}".format(self.data.shape))
             return 0
         return 1
 
-    def build(self, path_save_dataset, from_vid=None, size_dataset=None, concatenate=False):
+    def split_and_process(self, delta_time, test_ratio=0.3):
+
+        #SPLIT X AND Y WITH A DELTA OF TIME
+        for i in range(delta_time, len(self.data)):
+            self.X.append(self.data[i-delta_time])
+            self.Y.append(self.data[i])
+        self.X = np.asarray(self.X)
+        self.Y = np.asarray(self.Y)
+
+        #NORMALIZE DATA
+        self.X -= self.X.mean(0)[None, :]
+        self.X /= self.X.std(0)[None, :] + self.X.std() * 0.1
+        self.X /= np.amax(self.X)
+        self.Y -= self.Y.mean(0)[None, :]
+        self.Y /= self.Y.std(0)[None, :] + self.Y.std() * 0.1
+        self.Y /= np.amax(self.Y)
+
+        #SPLIT DATASET
+        idx = int(test_ratio*self.X.shape[0])
+        x_test = self.X[:idx]
+        y_test = self.Y[:idx]
+        x_train = self.X[idx:]
+        y_train = self.Y[idx:]
+
+        #SHUFFLE TRAIN DATA
+        R = np.random.permutation(x_train.shape[0])
+        x_train = x_train[R, :]
+        y_train = y_train[R, :]
+
+        print("Train :\tX {}\tY {}".format(x_train.shape, y_train.shape))
+        print("Test :\tX {}\tY {}".format(x_test.shape, y_test.shape))
+
+        return x_train, y_train, x_test, y_test
+
+    def build(self, path_save_dataset, from_vid=None):
         """
         Param :
             path_to_dataset : path where the dataset pickle file will be saved
@@ -48,120 +84,87 @@ class Dataset:
 
         ret, frame = cap.read()
         frame_gray = convertGray(frame)
-        prev_gray = frame_gray
 
-        if(not concatenate):
-            self.data = []
-
-        n_img, n = 0, 0
+        n_img = 0
         while cap.isOpened():
-
             ret, frame = cap.read()
             frame_gray = convertGray(frame)
+            gray_face, points = get_center_frame(frame_gray, self.img_size)
 
-            if ret and n%self.frame_delay==0:
-                previous = prev_gray
-                prev_gray = frame_gray
+            self.data.append(gray_face)
 
-                prev_face, points = get_center_frame(previous, self.data_size)
-                frame_face, points = get_center_frame(frame_gray,self.data_size)
+            n_img += 1
 
-                mult_face = matMultiplication(prev_face, frame_face)
+            cv2.rectangle(frame, points[0], points[1], (0,255,0), 3)
+            cv2.imshow("live", frame)
 
-                self.data.append(mult_face)
-                n_img += 1
-                if(size_dataset):
-                    print_progress(n_img, 0, size_dataset)
-                    if(n_img == size_dataset):
-                        break
-
-                # print(n_img)
-                cv2.rectangle(frame, points[0], points[1], (0,255,0), 3)
-                cv2.imshow("live", frame)
-
-            n+=1
             if(from_vid):
-                # print("{}/{}".format(n, int(cap.get(cv2.CAP_PROP_FRAME_COUNT))))
-                print_progress(n, 0, int(cap.get(cv2.CAP_PROP_FRAME_COUNT)))
-                if(int(cap.get(cv2.CAP_PROP_FRAME_COUNT))-1 == n):
+                if(int(cap.get(cv2.CAP_PROP_FRAME_COUNT))-1 == n_img):
                     break
+
             if (cv2.waitKey(1) & 0xFF == ord('q')) or not ret:
                 break
 
-        # shuffle data
-        random.shuffle(self.data)
+        self.data = np.asarray(self.data)
+        self.X = np.asarray(self.X)
+        self.Y = np.asarray(self.Y)
 
         # save on a pickle file
         with open(path_save_dataset, "wb") as save_file:
-            print("Saved : {} imgs".format(len(self.data)))
+            print("Save in {} ...".format(path_save_dataset))
             pickle.dump(self.data, save_file)
-            save_file.close()
-
-    def build_labeled(self, path_save_dataset, delta_frame=10, concatenate=False):
-
-        cap = cv2.VideoCapture(2)
-        ret, first = cap.read()
-        unknown = True
-        label = 0
-
-        while(cap.isOpened()):
-            keyInt = ord(getch.getch())
-
-            if(keyInt == 27): #echap
-                break
-            elif(keyInt == 122): #z
-                print("Haut")
-                label = 1
-                unknown = False
-            elif(keyInt == 115): #s
-                print("Bas")
-                label = 2
-                unknown = False
-            elif(keyInt == 100): #d
-                print("Droite")
-                label = 3
-                unknown = False
-            elif(keyInt == 113): #q
-                print("Gauche")
-                label = 4
-                unknown = False
-            elif(keyInt == 105): #i
-                print("Avant")
-                label = 5
-                unknown = False
-            elif(keyInt == 111): #o
-                print("Arriere")
-                label = 6
-                unknown = False
-            else:
-                print("Unknown key")
-                unknown = True
-
-            if(not unknown):
-                ret, first = cap.read()
-                cv2.waitKey(delta_frame)
-                ret, second = cap.read()
-
-                prev_face, points = get_center_frame(convertGray(first), self.data_size)
-                next_face, points = get_center_frame(convertGray(second),self.data_size)
-
-                mult_face = matMultiplication(prev_face, next_face)
-                if(self.with_labels):
-                    self.data.append((mult_face, label))
-                else:
-                    self.data.append(mult_face)
-
-                cv2.imshow("Multiplication", cv2.resize(mult_face, (300, 300)))
-
-        print(len(self.data))
+            pickle.dump(self.X, save_file)
+            pickle.dump(self.Y, save_file)
+            print("Data shape : {}".format(self.data.shape))
 
 
     def show_dataset(self, begin=0, end=1, delay=250):
         """Show a range of the dataset"""
         for i in range(begin, end+1):
-            cv2.imshow(str(i), self.data[i])
+            cv2.imwrite('../dataset/sample/sample_{}_X.png'.format(i),
+                        self.x_train[i])
+            cv2.imwrite('../dataset/sample/sample_{}_Y.png'.format(i),
+                        self.y_train[i])
+            cv2.imshow("x_{}".format(i), self.x_train[i])
+            cv2.imshow("y_{}".format(i), self.y_train[i])
         cv2.waitKey(delay)
         cv2.destroyAllWindows()
 
-# dataset = Dataset((80, 80), with_labels=True)
-# dataset.build_labeled("de")
+    def plot_image(self, idx):
+        fig=plt.figure(figsize=(8, 8))
+        fig.add_subplot(1, 3, 1)
+        plt.imshow(self.x_train[idx], cmap='gray')
+        fig.add_subplot(1, 3, 2)
+        plt.imshow(self.y_train[idx], cmap='gray')
+        fig.add_subplot(1, 3, 3)
+        plt.imshow(matMultiplication(self.x_train[idx], self.y_train[idx]),
+                   cmap='gray')
+        plt.show()
+        now = datetime.datetime.now()
+        fig.savefig('../dataset/sample/{}.png'.format(now))
+
+    def plot_dataset(self, begin=0, end=1):
+        fig=plt.figure(figsize=(8, 8))
+        nb_img = end - begin +1
+        nb_plot = 1
+        idx = begin
+        columns = 3
+        rows = nb_img
+        for i in range(1, nb_img+1):
+            ax = fig.add_subplot(rows, columns, nb_plot)
+            plt.imshow(self.x_train[idx], cmap='gray')
+            ax.set_title("X")
+            nb_plot += 1
+            ax = fig.add_subplot(rows, columns, nb_plot)
+            plt.imshow(self.y_train[idx], cmap='gray')
+            ax.set_title("Y")
+            nb_plot += 1
+            ax = fig.add_subplot(rows, columns, nb_plot)
+            plt.imshow(matMultiplication(self.x_train[idx], self.y_train[idx]),
+                       cmap='gray')
+            ax.set_title("X*Y")
+            nb_plot += 1
+            idx += 1
+        plt.show()
+        now = datetime.datetime.now()
+        fig.savefig('../dataset/sample/{}.png'.format(now))
