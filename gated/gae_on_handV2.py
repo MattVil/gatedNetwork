@@ -1,5 +1,6 @@
 import pylab
 import numpy
+import cv2
 from numpy import *
 import numpy.random
 import gatedAutoencoder
@@ -9,7 +10,7 @@ from theano.tensor.shared_randomstreams import RandomStreams
 
 
 def dispims(M, height, width, border=0, bordercolor=0.0, layout=None, **kwargs):
-    """ Display a whole stack (colunmwise) of vectorized matrices. Useful 
+    """ Display a whole stack (colunmwise) of vectorized matrices. Useful
         eg. to display the weights of a neural network layer.
     """
     from pylab import cm, ceil
@@ -44,14 +45,14 @@ class GraddescentMinibatch(object):
         self.verbose       = verbose
         self.batchsize     = batchsize
         self.numbatches    = self.data.get_value().shape[0] / batchsize
-        self.momentum      = momentum 
+        self.momentum      = momentum
         if rng is None:
             self.rng = numpy.random.RandomState(1)
         else:
             self.rng = rng
         self.epochcount = 0
-        self.index = T.lscalar() 
-        self.incs = dict([(p, theano.shared(value=numpy.zeros(p.get_value().shape, 
+        self.index = T.lscalar()
+        self.incs = dict([(p, theano.shared(value=numpy.zeros(p.get_value().shape,
                             dtype=theano.config.floatX), name='inc_'+p.name)) for p in self.model.params])
         self.inc_updates = {}
         self.updates = {}
@@ -61,9 +62,9 @@ class GraddescentMinibatch(object):
     def set_learningrate(self, learningrate):
         self.learningrate = learningrate
         for _param, _grad in zip(self.model.params, self.model._grads):
-            self.inc_updates[self.incs[_param]] = self.momentum * self.incs[_param] - self.learningrate * self.model.layer.learningrate_modifiers[_param.name] * _grad 
+            self.inc_updates[self.incs[_param]] = self.momentum * self.incs[_param] - self.learningrate * self.model.layer.learningrate_modifiers[_param.name] * _grad
             self.updates[_param] = _param + self.incs[_param]
-        self._updateincs = theano.function([self.index], self.model._cost, 
+        self._updateincs = theano.function([self.index], self.model._cost,
                                      updates = self.inc_updates,
                 givens = {self.model.inputs:self.data[self.index*self.batchsize:(self.index+1)*self.batchsize]})
         self._trainmodel = theano.function([self.n], self.noop, updates = self.updates)
@@ -86,7 +87,7 @@ print '... loading data'
 #train_features_x = numpy.load('./shiftsuniform_x.npy').astype(theano.config.floatX) #OLD
 #train_features_y = numpy.load('./shiftsuniform_y.npy').astype(theano.config.floatX) #OLD
 
-pkl_file = open('dataSetImageMain.txt', 'rb') #NEW
+pkl_file = open('../dataset/frame_only.txt', 'rb') #NEW
 
 #dataSetImageMain = pickle.load(pkl_file) #(2000, 160, 160, 3)
 train_features = pickle.load(pkl_file) #(2000, 160, 160, 3)
@@ -103,10 +104,13 @@ train_features   = rgb2gray(train_features)
 spatial_res=1
 train_features_x = train_features[::2,::spatial_res,::spatial_res]
 train_features_y = train_features[1::2,::spatial_res,::spatial_res]
+print("train feature X : {}".format(train_features_x.shape))
+print("train feature Y : {}".format(train_features_y.shape))
+
 
 # CUT THE IMAGE
-train_features_x = train_features[::2,60:,:160]
-train_features_y = train_features[1::2,60:,:160]
+# train_features_x = train_features[::2,60:,:160]
+# train_features_y = train_features[1::2,60:,:160]
 
 #NORMALIZE DATA:
 train_features_x -= train_features_x.mean(0)[None, :]
@@ -119,7 +123,7 @@ train_features_x/=amax(train_features_x)
 train_features_y/=amax(train_features_y)
 
 #SHUFFLE TRAINING DATA TO MAKE SURE ITS NOT SORTED:
-R = numpy.random.permutation(train_features_x.shape[0])
+R = numpy.random.permutation(train_features_y.shape[0])
 train_features_x = train_features_x[R, :]
 train_features_y = train_features_y[R, :]
 
@@ -187,16 +191,16 @@ numbatches = train_features.get_value().shape[0] / batchsize
 print '... instantiating model'
 numpy_rng  = numpy.random.RandomState(1)
 theano_rng = RandomStreams(1)
-model = gatedAutoencoder.FactoredGatedAutoencoder(numvisX=numvisX, 
-                                                  numvisY=numvisY, 
+model = gatedAutoencoder.FactoredGatedAutoencoder(numvisX=numvisX,
+                                                  numvisY=numvisY,
                                                   numfac=numfac, nummap=nummap, numhid=numhid,
-                                                  output_type='real', 
-                                                  weight_decay_vis=weight_decay_vis, 
+                                                  output_type='real',
+                                                  weight_decay_vis=weight_decay_vis,
                                                   weight_decay_map=weight_decay_map,
-                                                  corruption_type=corruption_type, 
-                                                  corruption_level=corruption_level, 
-                                                  init_topology = init_topology, 
-                                                  numpy_rng=numpy_rng, 
+                                                  corruption_type=corruption_type,
+                                                  corruption_level=corruption_level,
+                                                  init_topology = init_topology,
+                                                  numpy_rng=numpy_rng,
                                                   theano_rng=theano_rng)
 
 print '... done'
@@ -204,7 +208,7 @@ print '... done'
 
 
 # TRAIN MODEL
-numepochs = 100
+numepochs = 10 # TODO: 100
 learningrate = 0.01
 #trainer = gatedAutoencoder.GraddescentMinibatch(model, train_features, batchsize, learningrate)
 trainer = GraddescentMinibatch(model, train_features, batchsize, learningrate)
@@ -231,7 +235,7 @@ try:
     #dispims(model.layer.wyf.get_value(), sqrt(numvisY), sqrt(numvisY), 2)
     dispims(model.layer.wyf.get_value(), 100, 160)
 except Exception:
-    pass 
+    pass
 
 figure(3)
 clf()
@@ -244,10 +248,11 @@ try:
     pylab.subplot(1, 2, 2)
     dispims(model.layer.whf.get_value(), 5, 5,2) #25,100
     #dispims(model.layer.wyf.get_value(), sqrt(numvisY), sqrt(numvisY), 2)
-    #dispims(model.layer.wyf.get_value(), 100, 160) 
+    #dispims(model.layer.wyf.get_value(), 100, 160)
 except Exception:
-    pass 
+    pass
 
+cv2.waitKey(0)
 
 #f = file('models_learned.save', 'wb')
 #cPickle.dump(ca, f, protocol=cPickle.HIGHEST_PROTOCOL)
@@ -256,13 +261,14 @@ except Exception:
 #model.save('model_learned.save')
 #model.load('model_learned.save.npy')
 
-numpy.save('dataSetImageMain',dataSetImageMain)# (2000, 160, 160, 3)
+# numpy.save('dataSetImageMain',dataSetImageMain)# (2000, 160, 160, 3)
 numpy.save('train_features_numpy', train_features_numpy) #1000,32000
 numpy.save('train_features', train_features) #1000,32000
 
 idx=randint(100)
 imshow(reshape(model.layer.wxf.get_value()[:,idx], (160, 160)),interpolation='none')
+cv2.waitKey(0)
 colorbar()
-
+cv2.waitKey(0)
 imshow(reshape(model.layer.wxf.get_value()[:,idx], (160, 160)),interpolation='none')
-
+cv2.waitKey(0)

@@ -30,40 +30,6 @@ class Dataset:
             return 0
         return 1
 
-    def split_and_process(self, delta_time, test_ratio=0.3):
-
-        #SPLIT X AND Y WITH A DELTA OF TIME
-        for i in range(delta_time, len(self.data)):
-            self.X.append(self.data[i-delta_time])
-            self.Y.append(self.data[i])
-        self.X = np.asarray(self.X)
-        self.Y = np.asarray(self.Y)
-
-        #NORMALIZE DATA
-        self.X -= self.X.mean(0)[None, :]
-        self.X /= self.X.std(0)[None, :] + self.X.std() * 0.1
-        self.X /= np.amax(self.X)
-        self.Y -= self.Y.mean(0)[None, :]
-        self.Y /= self.Y.std(0)[None, :] + self.Y.std() * 0.1
-        self.Y /= np.amax(self.Y)
-
-        #SPLIT DATASET
-        idx = int(test_ratio*self.X.shape[0])
-        x_test = self.X[:idx]
-        y_test = self.Y[:idx]
-        x_train = self.X[idx:]
-        y_train = self.Y[idx:]
-
-        #SHUFFLE TRAIN DATA
-        R = np.random.permutation(x_train.shape[0])
-        x_train = x_train[R, :]
-        y_train = y_train[R, :]
-
-        print("Train :\tX {}\tY {}".format(x_train.shape, y_train.shape))
-        print("Test :\tX {}\tY {}".format(x_test.shape, y_test.shape))
-
-        return x_train, y_train, x_test, y_test
-
     def build(self, path_save_dataset, from_vid=None):
         """
         Param :
@@ -73,6 +39,8 @@ class Dataset:
             concatenate : True if you want to get more data without loosing the
                           the previous data
         """
+        self.data = np.asarray(self.data)
+        self.data = self.data.tolist()
         if(from_vid):
             cap = cv2.VideoCapture(from_vid)
         else:
@@ -106,16 +74,70 @@ class Dataset:
                 break
 
         self.data = np.asarray(self.data)
-        self.X = np.asarray(self.X)
-        self.Y = np.asarray(self.Y)
 
         # save on a pickle file
         with open(path_save_dataset, "wb") as save_file:
             print("Save in {} ...".format(path_save_dataset))
             pickle.dump(self.data, save_file)
-            pickle.dump(self.X, save_file)
-            pickle.dump(self.Y, save_file)
             print("Data shape : {}".format(self.data.shape))
+
+    def split_and_process(self, delta_time, test_ratio=0.3, valid_ratio=0.3):
+
+        #SPLIT X AND Y WITH A DELTA OF TIME
+        for i in range(delta_time, len(self.data)):
+            self.X.append(self.data[i-delta_time])
+            self.Y.append(self.data[i])
+        self.X = np.asarray(self.X)
+        self.Y = np.asarray(self.Y)
+
+        #NORMALIZE DATA
+        self.X -= self.X.mean(0)[None, :]
+        self.X /= self.X.std(0)[None, :] + self.X.std() * 0.1
+        self.X /= np.amax(self.X)
+        self.Y -= self.Y.mean(0)[None, :]
+        self.Y /= self.Y.std(0)[None, :] + self.Y.std() * 0.1
+        self.Y /= np.amax(self.Y)
+
+        #SHUFFLE TRAIN DATA
+        R = np.random.permutation(self.X.shape[0])
+        self.X = self.X[R, :]
+        self.Y = self.Y[R, :]
+
+        #SPLIT DATASET
+        idx = int(test_ratio*self.X.shape[0])
+        idx2 = int(valid_ratio*self.X.shape[0]) + idx
+        x_test = self.X[:idx]
+        y_test = self.Y[:idx]
+        x_valid = self.X[idx:idx2]
+        y_valid = self.Y[idx:idx2]
+        x_train = self.X[idx2:]
+        y_train = self.Y[idx2:]
+
+        print("Train :\tX {}\tY {}".format(x_train.shape, y_train.shape))
+        print("Test :\tX {}\tY {}".format(x_test.shape, y_test.shape))
+        print("Valid :\tX {}\tY {}".format(x_valid.shape, y_valid.shape))
+
+        return x_train, y_train, x_test, y_test, x_valid, y_valid
+
+    def process(self, delta_time):
+
+        #SPLIT X AND Y WITH A DELTA OF TIME
+        for i in range(delta_time, len(self.data)):
+            self.X.append(self.data[i-delta_time])
+            self.Y.append(self.data[i])
+        self.X = np.asarray(self.X)
+        self.Y = np.asarray(self.Y)
+
+        #NORMALIZE DATA
+        self.X -= self.X.mean(0)[None, :]
+        self.X /= self.X.std(0)[None, :] + self.X.std() * 0.1
+        self.X /= np.amax(self.X)
+        self.Y -= self.Y.mean(0)[None, :]
+        self.Y /= self.Y.std(0)[None, :] + self.Y.std() * 0.1
+        self.Y /= np.amax(self.Y)
+
+        print("Size - X: {}\tY: {}".format(self.X.shape, self.Y.shape))
+        return self.X, self.Y
 
 
     def show_dataset(self, begin=0, end=1, delay=250):

@@ -47,7 +47,7 @@ def plot_error_evolution(errs, figure_name):
     fig, ax = plt.subplots()
     ax.plot(errs)
 
-    ax.set(xlabel='Erreur quadratique', ylabel='Iteration',
+    ax.set(xlabel='Iterations', ylabel='Erreur quadratique',
            title='Evolution de l\'erreur quadratique avec le temps')
     ax.grid()
 
@@ -88,3 +88,6 @@ def record_video(file_name, frame_delay=1, vid_size=None):
     cap.release()
     out.release()
     cv2.destroyAllWindows()
+
+if __name__ == '__main__':
+    record_video("../dataset/louis2.avi")
